@@ -1,0 +1,1266 @@
+{
+  "name": "AI Recruiting Intelligence Platform — Demo",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "AI Recruiting Assistant - Candidate Check",
+        "formDescription": "Upload the job description and the candidate CV (PDF). The assistant extracts the text, matches the candidate, checks the LinkedIn profile against the CV, and shows a dashboard for your decision.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Job Title",
+              "fieldName": "job_title",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Job Description PDF",
+              "fieldType": "file",
+              "fieldName": "job_description_file",
+              "multipleFiles": false,
+              "acceptFileTypes": ".pdf",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Candidate CV PDF",
+              "fieldType": "file",
+              "fieldName": "candidate_cv_file",
+              "multipleFiles": false,
+              "acceptFileTypes": ".pdf",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Candidate LinkedIn URL (optional - used if the CV has no link)",
+              "fieldName": "linkedin_url",
+              "placeholder": "https://www.linkedin.com/in/..."
+            }
+          ]
+        },
+        "options": {
+          "buttonLabel": "Analyze candidate",
+          "customCss": ".form-description { text-align: left; font-size: 14px; }\n.form-description table { width: 100%; border-collapse: collapse; margin: 6px 0 14px; }\n.form-description td, .form-description th { border: 1px solid #ddd; padding: 6px; vertical-align: top; font-size: 13px; }\n.form-description th { background: #f4f4f6; }\n.form-description h3 { margin: 18px 0 6px; }"
+        }
+      },
+      "id": "f7d3e6ef-60ae-43a2-81a2-51a769249a11",
+      "name": "Recruiter Upload Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        0,
+        96
+      ],
+      "webhookId": "994a2b63-bd38-477f-a3a6-4f2e1c255546"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "={{ Object.keys($binary || {}).find(k => k.toLowerCase().includes('job')) }}",
+        "options": {
+          "joinPages": true,
+          "keepSource": "both"
+        }
+      },
+      "id": "4f0121c3-a759-4ada-a596-701e123c0a4d",
+      "name": "Extract Job Description PDF",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        272,
+        224
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "={{ Object.keys($binary || {}).find(k => k.toLowerCase().includes('cv')) }}",
+        "options": {
+          "joinPages": true,
+          "keepSource": "json"
+        }
+      },
+      "id": "558e5c97-106e-4f71-b513-b52afc178767",
+      "name": "Extract CV PDF",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        496,
+        416
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const form = $('Recruiter Upload Form').first().json;\nconst pick = (o, keys) => { for (const k of keys) { if (o[k] !== undefined && o[k] !== null && String(o[k]).trim() !== '') return String(o[k]).trim(); } return ''; };\nlet jdText = '';\nlet cvText = '';\nlet jdError = '';\nlet cvError = '';\ntry { const j = $('Extract Job Description PDF').first().json; jdText = String(j.text || '').trim(); jdError = j.error ? String(j.error.message || j.error) : ''; } catch (e) { jdError = 'Job description PDF could not be read'; }\ntry { const c = $('Extract CV PDF').first().json; cvText = String(c.text || '').trim(); cvError = c.error ? String(c.error.message || c.error) : ''; } catch (e) { cvError = 'CV PDF could not be read'; }\n\nconst jobTitle = pick(form, ['job_title', 'Job Title']);\nconst errors = [];\nif (!jobTitle) errors.push('Job title is missing');\nif (jdText.length < 80) errors.push('Job description PDF has no readable text' + (jdError ? ' (' + jdError + ')' : ' - it may be a scanned image; upload a text-based PDF'));\nif (cvText.length < 80) errors.push('CV PDF has no readable text' + (cvError ? ' (' + cvError + ')' : ' - it may be a scanned image; upload a text-based PDF'));\n\n// LinkedIn URL: taken ONLY from the CV text or the recruiter's form input - never generated.\nconst re = /(?:https?:\\/\\/)?(?:[a-z]{2,3}\\.)?linkedin\\.com\\/in\\/[A-Za-z0-9_%\\-]+/i;\nconst fromCv = (cvText.match(re) || [''])[0];\nconst fromForm = (pick(form, ['linkedin_url', 'Candidate LinkedIn URL (optional - used if the CV has no link)']).match(re) || [''])[0];\nlet linkedin = fromCv || fromForm;\nif (linkedin && !linkedin.toLowerCase().startsWith('http')) linkedin = 'https://' + linkedin;\n\nreturn [{ json: {\n  valid: errors.length === 0,\n  errors: errors,\n  message: errors.length === 0 ? 'Input is valid' : 'Input validation failed: ' + errors.join('; '),\n  job_title: jobTitle,\n  job_description: jdText,\n  candidate_resume: cvText,\n  linkedin_url: linkedin,\n  linkedin_source: fromCv ? 'cv' : (fromForm ? 'recruiter_input' : 'none')\n} }];"
+      },
+      "id": "8bd08256-6b2b-4333-86b4-b9762cf8a419",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        496,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "90ec0453-fecf-459d-94e3-50cd0356e971",
+      "name": "Input Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "respondWith": "showText",
+        "responseText": "=<h2>Could not analyze this candidate</h2><ul>{{ $json.errors.map(e => \"<li>\" + e + \"</li>\").join(\"\") }}</ul><p>Please go back and upload text-based PDF files.</p>"
+      },
+      "id": "92eaf8f7-a913-487e-ac17-61c6c1c6b154",
+      "name": "Input Error Page",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 2.5,
+      "position": [
+        912,
+        0
+      ],
+      "webhookId": "c05050f5-b260-49f2-b72c-c1da45a34d78"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5.4-mini",
+          "cachedResultName": "GPT-5.4-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=You are a recruiting assistant. Extract structured requirements from the job description below (text extracted from a PDF; ignore layout noise). Return ONLY a JSON object with exactly these keys:\n{\"job_title\":\"\",\"summary\":\"\",\"mandatory_requirements\":[],\"preferred_requirements\":[],\"skills\":[],\"education_requirements\":[],\"experience_requirements\":[],\"certifications\":[],\"location_requirements\":[],\"keywords\":[]}\nEach item in mandatory_requirements, preferred_requirements, education_requirements and experience_requirements is an object: {\"name\":\"\",\"category\":\"technical_skill|experience|education|certification|location|other\",\"mandatory\":true,\"minimum_years\":0}.\nMandatory = explicitly required. Preferred = described as preferred, desirable, nice-to-have or similar. Do not invent requirements or add skills that are not in the job description.\nRULES: 1) Use only the supplied input. 2) Do not hallucinate or invent missing information. 3) Do not guess dates or contact information. 4) Do not create fake qualifications, achievements or certifications. 5) Clearly identify missing information. 6) Keep output concise. 7) You support the recruiter's decision; you never make a hiring decision.\n\nJOB TITLE: {{ $('Validate Input').first().json.job_title }}\nJOB DESCRIPTION:\n{{ $('Validate Input').first().json.job_description }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "textFormat": {
+            "textOptions": {
+              "type": "json_object"
+            }
+          }
+        }
+      },
+      "id": "5e7a1584-0bf9-4ab1-b7f9-e1f1708ebb45",
+      "name": "Analyze Job Description",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        800,
+        320
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "Gateway credits",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5.4-mini",
+          "cachedResultName": "GPT-5.4-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=You are a recruiting assistant. Extract structured data from the CV below (text extracted from a PDF; columns may be interleaved, so read carefully). Return ONLY a JSON object with exactly these keys:\n{\"candidate_id\":\"\",\"name\":\"\",\"email\":\"\",\"phone\":\"\",\"linkedin_url\":\"\",\"summary\":\"\",\"skills\":[],\"education\":[],\"experience\":[],\"certifications\":[],\"projects\":[],\"languages\":[]}\neducation items: {\"institution\":\"\",\"degree\":\"\",\"field\":\"\",\"start_date\":\"\",\"end_date\":\"\",\"graduation_year\":\"\",\"evidence_text\":\"\"}\nexperience items: {\"company\":\"\",\"title\":\"\",\"start_date\":\"\",\"end_date\":\"\",\"description\":\"\",\"skills_used\":[],\"evidence_text\":\"\"}\nCopy dates exactly as written in the CV (e.g. \"January 2022\" or \"01/2022\"); use \"Present\" only if the CV says so. Set candidate_id to a lowercase slug of the name. Any value not present in the CV must be an empty string or empty array. Never guess.\nRULES: 1) Use only the supplied input. 2) Do not hallucinate or invent missing information. 3) Do not guess dates or contact information. 4) Do not create fake qualifications, achievements or certifications. 5) Clearly identify missing information. 6) Keep output concise. 7) You support the recruiter's decision; you never make a hiring decision.\n\nCV TEXT:\n{{ $('Validate Input').first().json.candidate_resume }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "textFormat": {
+            "textOptions": {
+              "type": "json_object"
+            }
+          }
+        }
+      },
+      "id": "fab95716-0814-436d-9239-a36c2366f4d5",
+      "name": "Analyze Resume",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        1024,
+        320
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "Gateway credits",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5.4-mini",
+          "cachedResultName": "GPT-5.4-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=You are a recruiting assistant. For each important job requirement, find supporting evidence in the CV. Return ONLY a JSON object:\n{\"evidence\":[{\"requirement\":\"\",\"requirement_category\":\"\",\"status\":\"\",\"evidence_text\":\"\",\"source\":\"cv\",\"confidence\":0}]}\nstatus must be one of: strong_evidence, partial_evidence, no_evidence, discrepancy, manual_review. confidence is a number from 0 to 1. evidence_text must quote what the CV actually says. Do not manufacture evidence.\nRULES: 1) Use only the supplied input. 2) Do not hallucinate or invent missing information. 3) Do not guess dates or contact information. 4) Do not create fake qualifications, achievements or certifications. 5) Clearly identify missing information. 6) Keep output concise. 7) You support the recruiter's decision; you never make a hiring decision.\n\nJOB REQUIREMENTS (JSON):\n{{ JSON.stringify($('Analyze Job Description').first().json.output[0].content[0].text) }}\n\nCV TEXT:\n{{ $('Validate Input').first().json.candidate_resume }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "textFormat": {
+            "textOptions": {
+              "type": "json_object"
+            }
+          }
+        }
+      },
+      "id": "dc3c040e-0894-4387-b5ea-7d5dc6917ea0",
+      "name": "Extract Candidate Evidence",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        1248,
+        320
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "Gateway credits",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5.4-mini",
+          "cachedResultName": "GPT-5.4-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=You are a recruiting assistant. Compare the job requirements, the parsed CV and the extracted evidence, and explain how the candidate matches the job. Return ONLY a JSON object:\n{\"overall_status\":\"\",\"match_score\":0,\"mandatory_requirements_met\":0,\"mandatory_requirements_total\":0,\"preferred_requirements_met\":0,\"preferred_requirements_total\":0,\"requirement_matches\":[{\"requirement\":\"\",\"mandatory\":true,\"met\":\"yes|partial|no\",\"explanation\":\"\"}],\"strengths\":[],\"gaps\":[],\"manual_review_items\":[]}\noverall_status must be one of: strong_match, possible_match, weak_match, manual_review. match_score is 0-100. A high score must never hide a failed mandatory requirement: list any missing mandatory requirement in gaps. Do not reject the candidate; you only assist the recruiter.\nRULES: 1) Use only the supplied input. 2) Do not hallucinate or invent missing information. 3) Do not guess dates or contact information. 4) Do not create fake qualifications, achievements or certifications. 5) Clearly identify missing information. 6) Keep output concise. 7) You support the recruiter's decision; you never make a hiring decision.\n\nJOB REQUIREMENTS:\n{{ JSON.stringify($('Analyze Job Description').first().json.output[0].content[0].text) }}\n\nPARSED CV:\n{{ JSON.stringify($('Analyze Resume').first().json.output[0].content[0].text) }}\n\nEVIDENCE:\n{{ JSON.stringify($('Extract Candidate Evidence').first().json.output[0].content[0].text) }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "textFormat": {
+            "textOptions": {
+              "type": "json_object"
+            }
+          }
+        }
+      },
+      "id": "92b53584-a4fa-41f3-ada8-59e3c09c3b18",
+      "name": "Match Candidate",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        1472,
+        320
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "Gateway credits",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const FENCE = String.fromCharCode(96, 96, 96);\nfunction readAi(nodeName) {\n  let value;\n  try {\n    const out = $(nodeName).first().json.output;\n    value = out && out[0] && out[0].content && out[0].content[0] ? out[0].content[0].text : undefined;\n  } catch (e) {\n    return null;\n  }\n  if (value && typeof value === 'object') return value;\n  if (typeof value !== 'string' || value.trim() === '') return null;\n  let s = value.trim();\n  if (s.startsWith(FENCE)) {\n    s = s.split(FENCE).join('');\n    if (s.startsWith('json')) s = s.slice(4);\n  }\n  try { return JSON.parse(s.trim()); } catch (e) { return null; }\n}\n\nconst checks = [\n  { key: 'job', node: 'Analyze Job Description', required: ['job_title', 'mandatory_requirements', 'preferred_requirements', 'skills'] },\n  { key: 'resume', node: 'Analyze Resume', required: ['name', 'skills', 'education', 'experience'] },\n  { key: 'evidence', node: 'Extract Candidate Evidence', required: ['evidence'] },\n  { key: 'match', node: 'Match Candidate', required: ['overall_status', 'match_score', 'strengths', 'gaps'] },\n];\n\nconst result = { ai_valid: true, problems: [] };\nfor (const c of checks) {\n  const obj = readAi(c.node);\n  if (!obj) {\n    result.ai_valid = false;\n    result.problems.push(c.node + ': empty or invalid JSON output');\n    continue;\n  }\n  const missing = c.required.filter((k) => !(k in obj));\n  if (missing.length) {\n    result.ai_valid = false;\n    result.problems.push(c.node + ': missing fields ' + missing.join(', '));\n  }\n  result[c.key] = obj;\n}\nreturn [{ json: result }];"
+      },
+      "id": "fe6de62b-6ea4-4a65-b3c4-e8c95e8ca685",
+      "name": "Check AI Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1696,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c2",
+              "leftValue": "={{ $json.ai_valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "13d6779c-9e1b-4989-be3a-6cc25095dfd3",
+      "name": "AI Output Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1920,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "l1",
+              "leftValue": "={{ $('Validate Input').first().json.linkedin_url }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4bca8c7e-274e-4bcd-aa81-252740b2987a",
+      "name": "Has LinkedIn URL?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1328,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/harvestapi~linkedin-profile-scraper/run-sync-get-dataset-items",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpTemplatedCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ profileScraperMode: \"Profile details no email ($4 per 1k)\", queries: [$('Validate Input').first().json.linkedin_url] }) }}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "fdaa5fc1-8170-4540-b0e2-14613dd9b857",
+      "name": "Fetch LinkedIn Profile",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1552,
+        512
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "httpTemplatedCustomAuth": {
+          "id": "4B50HoPEBK2St27X",
+          "name": "Apify API Token (niai)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const url = $('Validate Input').first().json.linkedin_url || '';\nconst source = $('Validate Input').first().json.linkedin_source;\nif (!url) {\n  return [{ json: { linkedin_status: 'no_linkedin_url', linkedin_url: '', linkedin_source: 'none', profile: null, note: 'No linkedin.com/in/ URL found in the CV text or the form. Links hidden behind text in a PDF are not always extractable - add the URL in the form to check it.' } }];\n}\nlet items = [];\ntry { items = $('Fetch LinkedIn Profile').all().map((i) => i.json); } catch (e) { items = []; }\nconst errorItem = items.find((j) => j && j.error);\nconst profile = items.find((j) => j && !j.error && (Array.isArray(j.experience) || Array.isArray(j.education) || j.firstName));\nif (!profile) {\n  return [{ json: { linkedin_status: 'fetch_failed', linkedin_url: url, linkedin_source: source, profile: null, note: errorItem ? 'LinkedIn lookup failed: ' + String(errorItem.error.message || errorItem.error).slice(0, 300) : 'LinkedIn lookup returned no profile (private, removed, or scraper unavailable).' } }];\n}\nconst cut = (v, n) => (v === undefined || v === null ? '' : String(v).slice(0, n));\nconst dateText = (d) => (d && typeof d === 'object' ? (d.text || [d.month, d.year].filter(Boolean).join(' ')) : cut(d, 30));\nconst clean = (o) => {\n  const out = {};\n  for (const k of Object.keys(o || {})) {\n    const v = o[k];\n    if (k === 'startDate' || k === 'endDate') out[k] = dateText(v);\n    else if (typeof v === 'string') out[k] = cut(v, k === 'description' ? 300 : 200);\n    else if (typeof v === 'number' || typeof v === 'boolean') out[k] = v;\n  }\n  return out;\n};\nreturn [{ json: {\n  linkedin_status: 'fetched',\n  linkedin_url: url,\n  linkedin_source: source,\n  profile: {\n    name: [profile.firstName, profile.lastName].filter(Boolean).join(' '),\n    headline: cut(profile.headline, 200),\n    location: profile.location && profile.location.linkedinText ? profile.location.linkedinText : '',\n    experience: (profile.experience || []).slice(0, 15).map(clean),\n    education: (profile.education || []).slice(0, 10).map(clean),\n    certifications: (profile.certifications || []).slice(0, 10).map(clean)\n  },\n  note: 'Profile data retrieved live from LinkedIn via Apify scraper'\n} }];"
+      },
+      "id": "31b85fee-e780-44c6-8cb6-d562e9eb8a88",
+      "name": "Prepare LinkedIn Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1776,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "respondWith": "showText",
+        "responseText": "=<h2>Manual review required</h2><p>The AI analysis returned incomplete output, so no automatic result is shown.</p><ul>{{ $json.problems.map(p => \"<li>\" + p + \"</li>\").join(\"\") }}</ul>"
+      },
+      "id": "61c2a5da-a916-4762-99c6-e9534d041b0e",
+      "name": "AI Validation Failed Page",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 2.5,
+      "position": [
+        1440,
+        96
+      ],
+      "webhookId": "9e8e8ef3-0717-49ab-b23f-f8335061c7d1"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5.4-mini",
+          "cachedResultName": "GPT-5.4-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=You are a recruiting verification assistant. Compare the candidate's CV with their LinkedIn profile, focusing on the EDUCATION and EXPERIENCE sections. Return ONLY a JSON object:\n{\"linkedin_status\":\"\",\"name_match\":\"yes|no|unclear\",\"education_checks\":[{\"cv_item\":\"\",\"linkedin_item\":\"\",\"status\":\"match|minor_difference|mismatch|not_on_linkedin\",\"notes\":\"\"}],\"experience_checks\":[{\"cv_item\":\"\",\"linkedin_item\":\"\",\"title_status\":\"match|minor_difference|mismatch|not_on_linkedin\",\"dates_status\":\"match|minor_difference|mismatch|unknown\",\"notes\":\"\"}],\"linkedin_only_items\":[],\"overall\":\"consistent|minor_discrepancies|major_discrepancies|not_verified\",\"summary\":\"\"}\nRules: cv_item and linkedin_item must quote the actual values from each source (company, title, institution, degree, dates). Month-level date differences of up to 2 months or abbreviation differences (\"BS\" vs \"Bachelor of Science\") are minor_difference. Different employer, different degree, or date differences above 6 months are mismatch. If linkedin_status in the data is not \"fetched\", set linkedin_status to that value, overall to \"not_verified\", leave the check arrays empty and explain why in summary. Never assume a match that is not visible in both sources.\nRULES: 1) Use only the supplied input. 2) Do not hallucinate or invent missing information. 3) Do not guess dates or contact information. 4) Do not create fake qualifications, achievements or certifications. 5) Clearly identify missing information. 6) Keep output concise. 7) You support the recruiter's decision; you never make a hiring decision.\n\nCV EDUCATION: {{ JSON.stringify($('Check AI Output').first().json.resume.education) }}\nCV EXPERIENCE: {{ JSON.stringify($('Check AI Output').first().json.resume.experience) }}\nCV NAME: {{ $('Check AI Output').first().json.resume.name }}\n\nLINKEDIN DATA: {{ JSON.stringify($json) }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "textFormat": {
+            "textOptions": {
+              "type": "json_object"
+            }
+          }
+        }
+      },
+      "id": "c645871e-0360-4d97-a98e-3a13d0621b05",
+      "name": "Compare CV vs LinkedIn",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        2000,
+        496
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "Gateway credits",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Deterministic checks on the CV's own work history. Never guesses missing dates.\nconst ai = $('Check AI Output').first().json;\nconst resume = ai.resume || {};\nconst job = ai.job || {};\nconst MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };\nconst now = new Date();\nfunction toIndex(v, isEnd) {\n  const s = String(v || '').toLowerCase().trim();\n  if (!s) return null;\n  if (['present', 'current', 'now', 'till date', 'to date'].includes(s)) return now.getFullYear() * 12 + now.getMonth();\n  let m = s.match(/^(\\d{4})[-\\/](\\d{1,2})/);\n  if (m) return Number(m[1]) * 12 + Number(m[2]) - 1;\n  m = s.match(/^(\\d{1,2})[-\\/](\\d{4})$/);\n  if (m) return Number(m[2]) * 12 + Number(m[1]) - 1;\n  m = s.match(/([a-z]{3})[a-z]*\\.?\\s+(\\d{4})/);\n  if (m && MONTHS[m[1]]) return Number(m[2]) * 12 + MONTHS[m[1]] - 1;\n  m = s.match(/^(\\d{4})$/);\n  if (m) return Number(m[1]) * 12 + (isEnd ? 11 : 0);\n  return null;\n}\nconst issues = [];\nconst roles = [];\nfor (const r of resume.experience || []) {\n  const s = toIndex(r.start_date, false);\n  const e = toIndex(r.end_date, true);\n  if (s === null) issues.push((r.company || 'Unknown company') + ': start date missing or unreadable');\n  if (e === null) issues.push((r.company || 'Unknown company') + ': end date missing or unreadable');\n  if (s !== null && e !== null) {\n    if (e < s) issues.push((r.company || 'Unknown company') + ': end date is before start date');\n    else roles.push({ company: r.company, s: s, e: e });\n  }\n}\nroles.sort((a, b) => a.s - b.s);\nconst gaps = [];\nconst overlaps = [];\nfor (let i = 1; i < roles.length; i++) {\n  const prev = roles[i - 1];\n  const cur = roles[i];\n  if (cur.s - prev.e > 6) gaps.push(prev.company + ' -> ' + cur.company + ': ' + (cur.s - prev.e) + ' month gap');\n  if (prev.e - cur.s > 1) overlaps.push(prev.company + ' and ' + cur.company + ' overlap by ' + (prev.e - cur.s) + ' months');\n}\n// Total experience without double-counting overlaps\nlet months = 0;\nlet lastEnd = -1;\nfor (const r of roles) {\n  const start = Math.max(r.s, lastEnd + 1);\n  if (r.e >= start) months += r.e - start + 1;\n  lastEnd = Math.max(lastEnd, r.e);\n}\nconst years = Math.round((months / 12) * 10) / 10;\nconst reqs = [].concat(job.mandatory_requirements || [], job.experience_requirements || []);\nconst minYears = reqs.reduce((m, r) => Math.max(m, Number(r && r.minimum_years) || 0), 0);\nlet experience_vs_requirement = 'no_minimum_stated';\nif (minYears > 0) experience_vs_requirement = roles.length === 0 ? 'cannot_calculate' : (years >= minYears ? 'meets_minimum' : 'below_minimum');\nreturn [{ json: {\n  total_experience_years: roles.length ? years : null,\n  required_minimum_years: minYears || null,\n  experience_vs_requirement: experience_vs_requirement,\n  employment_gaps: gaps,\n  overlapping_roles: overlaps,\n  date_issues: issues,\n  roles_with_valid_dates: roles.length,\n  roles_in_cv: (resume.experience || []).length\n} }];"
+      },
+      "id": "2b1f8585-150e-47b0-bd7f-eb4aaa8af374",
+      "name": "Check CV Timeline",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2224,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5.4-mini",
+          "cachedResultName": "GPT-5.4-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=You are a recruiting assistant. Write a short recruiter summary (max 120 words, plain text, no headings) covering: how well the candidate matches, the most important strengths, the most important gaps, what the LinkedIn check showed, and what the recruiter should verify next. Frame it as a recommendation for recruiter review, never as a hiring decision. Never say \"hire\".\nRULES: 1) Use only the supplied input. 2) Do not hallucinate or invent missing information. 3) Do not guess dates or contact information. 4) Do not create fake qualifications, achievements or certifications. 5) Clearly identify missing information. 6) Keep output concise. 7) You support the recruiter's decision; you never make a hiring decision.\n\nMATCH: {{ JSON.stringify($('Check AI Output').first().json.match) }}\nLINKEDIN COMPARISON: {{ JSON.stringify($('Compare CV vs LinkedIn').first().json.output[0].content[0].text) }}\nCV TIMELINE CHECK: {{ JSON.stringify($json) }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "5a1d7920-4123-4331-be49-d2bc0ca9959d",
+      "name": "Generate Recruiter Summary",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        1856,
+        704
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "Gateway credits",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const FENCE = String.fromCharCode(96, 96, 96);\nfunction parse(v) {\n  if (v && typeof v === 'object') return v;\n  if (typeof v !== 'string') return null;\n  let s = v.trim();\n  if (s.startsWith(FENCE)) { s = s.split(FENCE).join(''); if (s.startsWith('json')) s = s.slice(4); }\n  try { return JSON.parse(s.trim()); } catch (e) { return null; }\n}\nconst esc = (v) => String(v === undefined || v === null || v === '' ? '-' : v).split('&').join('&amp;').split('<').join('&lt;').split('>').join('&gt;');\nconst ai = $('Check AI Output').first().json;\nconst input = $('Validate Input').first().json;\nconst li = $('Prepare LinkedIn Data').first().json;\nconst cmp = parse($('Compare CV vs LinkedIn').first().json.output[0].content[0].text) || { overall: 'not_verified', summary: 'LinkedIn comparison output could not be read', education_checks: [], experience_checks: [] };\nconst tl = $('Check CV Timeline').first().json;\nlet summary = '';\ntry { summary = $('Generate Recruiter Summary').first().json.output[0].content[0].text; } catch (e) { summary = ''; }\nconst m = ai.match || {};\nconst r = ai.resume || {};\nconst label = { strong_match: 'STRONG MATCH', possible_match: 'POSSIBLE MATCH', weak_match: 'WEAK MATCH', manual_review: 'MANUAL REVIEW' };\nconst list = (arr) => (arr && arr.length ? '<ul>' + arr.map((x) => '<li>' + esc(typeof x === 'object' ? JSON.stringify(x) : x) + '</li>').join('') + '</ul>' : '<p>None</p>');\n\nlet h = '';\nh += '<h3>Match status: ' + esc(label[m.overall_status] || m.overall_status) + ' - ' + esc(m.match_score) + '/100</h3>';\nh += '<table><tr><th>Candidate</th><td>' + esc(r.name) + '</td></tr>';\nh += '<tr><th>Target role</th><td>' + esc(input.job_title) + '</td></tr>';\nh += '<tr><th>Mandatory requirements met</th><td>' + esc(m.mandatory_requirements_met) + ' of ' + esc(m.mandatory_requirements_total) + '</td></tr>';\nh += '<tr><th>Preferred requirements met</th><td>' + esc(m.preferred_requirements_met) + ' of ' + esc(m.preferred_requirements_total) + '</td></tr>';\nh += '<tr><th>Experience (from CV dates)</th><td>' + esc(tl.total_experience_years) + ' years' + (tl.required_minimum_years ? ' (required: ' + esc(tl.required_minimum_years) + ', ' + esc(tl.experience_vs_requirement) + ')' : '') + '</td></tr>';\nh += '<tr><th>LinkedIn check</th><td>' + esc(String(cmp.overall || 'not_verified').toUpperCase()) + ' - ' + esc(li.linkedin_status) + (li.linkedin_url ? ' (' + esc(li.linkedin_url) + ', source: ' + esc(li.linkedin_source) + ')' : '') + '</td></tr>';\nh += '<tr><th>Contact (from CV only)</th><td>' + esc(r.email) + ' / ' + esc(r.phone) + '</td></tr></table>';\nh += '<h3>Recruiter summary</h3><p>' + esc(summary) + '</p>';\nh += '<h3>Requirement match</h3><table><tr><th>Requirement</th><th>Mandatory</th><th>Met</th><th>Explanation</th></tr>';\nfor (const q of m.requirement_matches || []) h += '<tr><td>' + esc(q.requirement) + '</td><td>' + (q.mandatory ? 'Yes' : 'No') + '</td><td>' + esc(q.met) + '</td><td>' + esc(q.explanation) + '</td></tr>';\nh += '</table>';\nh += '<h3>Strengths</h3>' + list(m.strengths);\nh += '<h3>Gaps</h3>' + list(m.gaps);\nh += '<h3>LinkedIn vs CV - Education</h3>';\nif ((cmp.education_checks || []).length) {\n  h += '<table><tr><th>CV</th><th>LinkedIn</th><th>Status</th><th>Notes</th></tr>';\n  for (const c of cmp.education_checks) h += '<tr><td>' + esc(c.cv_item) + '</td><td>' + esc(c.linkedin_item) + '</td><td>' + esc(c.status) + '</td><td>' + esc(c.notes) + '</td></tr>';\n  h += '</table>';\n} else h += '<p>Not verified. ' + esc(li.note) + '</p>';\nh += '<h3>LinkedIn vs CV - Experience</h3>';\nif ((cmp.experience_checks || []).length) {\n  h += '<table><tr><th>CV</th><th>LinkedIn</th><th>Title</th><th>Dates</th><th>Notes</th></tr>';\n  for (const c of cmp.experience_checks) h += '<tr><td>' + esc(c.cv_item) + '</td><td>' + esc(c.linkedin_item) + '</td><td>' + esc(c.title_status) + '</td><td>' + esc(c.dates_status) + '</td><td>' + esc(c.notes) + '</td></tr>';\n  h += '</table>';\n} else h += '<p>Not verified. ' + esc(li.note) + '</p>';\nh += '<p><b>LinkedIn summary:</b> ' + esc(cmp.summary) + '</p>';\nh += '<h3>CV timeline checks</h3>' + list([].concat(tl.employment_gaps || [], tl.overlapping_roles || [], tl.date_issues || []));\nh += '<h3>Manual review items</h3>' + list(m.manual_review_items);\nh += '<p><i>The AI does not make hiring decisions. Verify key facts before submitting the candidate.</i></p>';\n\nreturn [{ json: { dashboard_html: h, match_status: m.overall_status, match_score: m.match_score, linkedin_overall: cmp.overall, linkedin_comparison: cmp, timeline: tl, summary: summary } }];"
+      },
+      "id": "909d747b-ee39-44d8-b99e-ffc212224daf",
+      "name": "Build Dashboard",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Recruiter Decision",
+              "fieldType": "dropdown",
+              "fieldName": "recruiter_decision",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "APPROVE"
+                  },
+                  {
+                    "option": "EDIT"
+                  },
+                  {
+                    "option": "REJECT"
+                  },
+                  {
+                    "option": "REQUEST_REVIEW"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Recruiter Notes",
+              "fieldType": "textarea",
+              "fieldName": "recruiter_notes"
+            }
+          ]
+        },
+        "options": {
+          "formTitle": "Candidate Match Dashboard",
+          "formDescription": "={{ $json.dashboard_html }}",
+          "buttonLabel": "Submit decision",
+          "customCss": ".form-description { text-align: left; font-size: 14px; }\n.form-description table { width: 100%; border-collapse: collapse; margin: 6px 0 14px; }\n.form-description td, .form-description th { border: 1px solid #ddd; padding: 6px; vertical-align: top; font-size: 13px; }\n.form-description th { background: #f4f4f6; }\n.form-description h3 { margin: 18px 0 6px; }"
+        }
+      },
+      "id": "7cfdaca8-c1df-468c-ae5d-7eafec12d0e9",
+      "name": "Recruiter Review Dashboard",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 2.5,
+      "position": [
+        2304,
+        704
+      ],
+      "webhookId": "6afef94c-018b-4675-be6f-bae483a4d1cc"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.recruiter_decision || $json['Recruiter Decision'] }}",
+                    "rightValue": "APPROVE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "APPROVE"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.recruiter_decision || $json['Recruiter Decision'] }}",
+                    "rightValue": "EDIT",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "EDIT"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.recruiter_decision || $json['Recruiter Decision'] }}",
+                    "rightValue": "REJECT",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "REJECT"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.recruiter_decision || $json['Recruiter Decision'] }}",
+                    "rightValue": "REQUEST_REVIEW",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "REQUEST_REVIEW"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "531a1a31-a24d-4cf6-9d1c-8914acdbed92",
+      "name": "Route Recruiter Decision",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        2528,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5.4-mini",
+          "cachedResultName": "GPT-5.4-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=You are a recruiting assistant. The recruiter has approved this candidate for submission. Write a concise plain-text candidate submission with these headings:\nCandidate Name, Target Position, Professional Summary, Relevant Experience, Relevant Skills, Education, Verification Summary, Recruiter Notes.\nUse only source-backed information from the data below. In Verification Summary, state the LinkedIn check result exactly as given (including any discrepancies). Do not create fictional achievements or add information not present in the source data.\nRULES: 1) Use only the supplied input. 2) Do not hallucinate or invent missing information. 3) Do not guess dates or contact information. 4) Do not create fake qualifications, achievements or certifications. 5) Clearly identify missing information. 6) Keep output concise. 7) You support the recruiter's decision; you never make a hiring decision.\n\nCV ANALYSIS: {{ JSON.stringify($('Check AI Output').first().json.resume) }}\nJOB ANALYSIS: {{ JSON.stringify($('Check AI Output').first().json.job) }}\nMATCH: {{ JSON.stringify($('Check AI Output').first().json.match) }}\nLINKEDIN COMPARISON: {{ JSON.stringify($('Build Dashboard').first().json.linkedin_comparison) }}\nRECRUITER NOTES: {{ $('Recruiter Review Dashboard').first().json.recruiter_notes || '' }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "e9005b73-b4bd-4c09-a539-71fcf5999b7d",
+      "name": "Final Candidate Submission",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        2752,
+        416
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "Gateway credits",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const ai = $('Check AI Output').first().json;\nconst dash = $('Build Dashboard').first().json;\nconst review = $('Recruiter Review Dashboard').first().json;\nconst decision = String(review.recruiter_decision || review['Recruiter Decision'] || '').toUpperCase();\nlet status;\nlet submission = '';\nif (decision === 'APPROVE') {\n  status = 'approved_for_submission';\n  submission = $json.output && $json.output[0] ? $json.output[0].content[0].text : '';\n} else {\n  status = $json.status;\n  submission = $json.message;\n}\nconst esc = (v) => String(v || '').split('&').join('&amp;').split('<').join('&lt;').split('>').join('&gt;');\nconst html = '<h2>Decision recorded: ' + esc(decision) + '</h2>' +\n  '<p>Match status: <b>' + esc(dash.match_status) + '</b> (' + esc(dash.match_score) + '/100) - LinkedIn check: <b>' + esc(dash.linkedin_overall) + '</b></p>' +\n  '<pre style=\"white-space:pre-wrap;text-align:left\">' + esc(submission) + '</pre>';\nreturn [{ json: {\n  status: status,\n  recruiter_decision: decision,\n  recruiter_notes: review.recruiter_notes || '',\n  candidate: ai.resume,\n  job: ai.job,\n  match: ai.match,\n  linkedin_comparison: dash.linkedin_comparison,\n  timeline: dash.timeline,\n  summary: dash.summary,\n  submission: submission,\n  result_html: html\n} }];"
+      },
+      "id": "21d7a708-5581-4612-9691-9090a57d06c1",
+      "name": "Final Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2976,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "m1",
+              "name": "status",
+              "value": "edit_requested",
+              "type": "string"
+            },
+            {
+              "id": "m2",
+              "name": "message",
+              "value": "Candidate requires recruiter edits before submission.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "21dd6527-b64f-4994-a93d-5b07953a9a94",
+      "name": "Edit Requested",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        2752,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "m1",
+              "name": "status",
+              "value": "rejected",
+              "type": "string"
+            },
+            {
+              "id": "m2",
+              "name": "message",
+              "value": "Candidate was rejected by the recruiter.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "22f10742-7894-4be1-b5b0-ce381b2e6956",
+      "name": "Rejected by Recruiter",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        2752,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "m1",
+              "name": "status",
+              "value": "review_requested",
+              "type": "string"
+            },
+            {
+              "id": "m2",
+              "name": "message",
+              "value": "Candidate requires additional recruiter review.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "846c84b2-fca2-4ec9-a2ee-c9e4a45d1375",
+      "name": "Review Requested",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        2752,
+        992
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "respondWith": "showText",
+        "responseText": "={{ $json.result_html }}"
+      },
+      "id": "cfac106f-e38f-49b1-a587-2309d230e5b1",
+      "name": "Result Page",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 2.5,
+      "position": [
+        3200,
+        704
+      ],
+      "webhookId": "c0f09def-a9eb-4e2c-a905-e7803d3bab7c"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Recruiter Upload Form": {
+      "main": [
+        [
+          {
+            "node": "Extract Job Description PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Job Description PDF": {
+      "main": [
+        [
+          {
+            "node": "Extract CV PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract CV PDF": {
+      "main": [
+        [
+          {
+            "node": "Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Input Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Input Valid?": {
+      "main": [
+        [
+          {
+            "node": "Analyze Job Description",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Input Error Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Job Description": {
+      "main": [
+        [
+          {
+            "node": "Analyze Resume",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Resume": {
+      "main": [
+        [
+          {
+            "node": "Extract Candidate Evidence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Candidate Evidence": {
+      "main": [
+        [
+          {
+            "node": "Match Candidate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Match Candidate": {
+      "main": [
+        [
+          {
+            "node": "Check AI Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check AI Output": {
+      "main": [
+        [
+          {
+            "node": "AI Output Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Output Valid?": {
+      "main": [
+        [
+          {
+            "node": "Has LinkedIn URL?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Validation Failed Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has LinkedIn URL?": {
+      "main": [
+        [
+          {
+            "node": "Fetch LinkedIn Profile",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare LinkedIn Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch LinkedIn Profile": {
+      "main": [
+        [
+          {
+            "node": "Prepare LinkedIn Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare LinkedIn Data": {
+      "main": [
+        [
+          {
+            "node": "Compare CV vs LinkedIn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare CV vs LinkedIn": {
+      "main": [
+        [
+          {
+            "node": "Check CV Timeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check CV Timeline": {
+      "main": [
+        [
+          {
+            "node": "Generate Recruiter Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Recruiter Summary": {
+      "main": [
+        [
+          {
+            "node": "Build Dashboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Dashboard": {
+      "main": [
+        [
+          {
+            "node": "Recruiter Review Dashboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recruiter Review Dashboard": {
+      "main": [
+        [
+          {
+            "node": "Route Recruiter Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Recruiter Decision": {
+      "main": [
+        [
+          {
+            "node": "Final Candidate Submission",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Requested",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rejected by Recruiter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Review Requested",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final Candidate Submission": {
+      "main": [
+        [
+          {
+            "node": "Final Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final Output": {
+      "main": [
+        [
+          {
+            "node": "Result Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Requested": {
+      "main": [
+        [
+          {
+            "node": "Final Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rejected by Recruiter": {
+      "main": [
+        [
+          {
+            "node": "Final Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Requested": {
+      "main": [
+        [
+          {
+            "node": "Final Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "17585d64-f6a8-4003-be05-3e7d5459e028",
+  "meta": {
+    "instanceId": "582f9ff97f851799c4fedf10252ff9117462a626b666a6c9e7e715f655df5932"
+  },
+  "nodeGroups": [
+    {
+      "id": "571d397c-2b5c-4d8b-86fc-97a771a33edf",
+      "name": "Read uploaded PDFs",
+      "nodeIds": [
+        "4f0121c3-a759-4ada-a596-701e123c0a4d",
+        "558e5c97-106e-4f71-b513-b52afc178767",
+        "8bd08256-6b2b-4333-86b4-b9762cf8a419",
+        "90ec0453-fecf-459d-94e3-50cd0356e971"
+      ],
+      "description": "Pulls text from the uploaded job description and CV, finds the LinkedIn link, and stops on unreadable files"
+    },
+    {
+      "id": "1ccd13a2-e508-4823-a2ac-b88a4908125d",
+      "name": "Analyze job and candidate",
+      "nodeIds": [
+        "5e7a1584-0bf9-4ab1-b7f9-e1f1708ebb45",
+        "fab95716-0814-436d-9239-a36c2366f4d5",
+        "dc3c040e-0894-4387-b5ea-7d5dc6917ea0",
+        "92b53584-a4fa-41f3-ada8-59e3c09c3b18",
+        "fe6de62b-6ea4-4a65-b3c4-e8c95e8ca685",
+        "13d6779c-9e1b-4989-be3a-6cc25095dfd3"
+      ],
+      "description": "AI extracts requirements, parses the CV, finds evidence and scores the match; bad AI output goes to manual review"
+    },
+    {
+      "id": "8b3f3e5b-6fc9-44fd-91ff-4f6170545507",
+      "name": "Verify against LinkedIn",
+      "nodeIds": [
+        "4bca8c7e-274e-4bcd-aa81-252740b2987a",
+        "fdaa5fc1-8170-4540-b0e2-14613dd9b857",
+        "31b85fee-e780-44c6-8cb6-d562e9eb8a88",
+        "c645871e-0360-4d97-a98e-3a13d0621b05",
+        "2b1f8585-150e-47b0-bd7f-eb4aaa8af374"
+      ],
+      "description": "Fetches the live LinkedIn profile, compares education and experience with the CV, and checks CV dates for gaps"
+    },
+    {
+      "id": "fc0771ad-525e-49d1-a966-d52278c7a1cd",
+      "name": "Recruiter dashboard and decision",
+      "nodeIds": [
+        "5a1d7920-4123-4331-be49-d2bc0ca9959d",
+        "909d747b-ee39-44d8-b99e-ffc212224daf",
+        "7cfdaca8-c1df-468c-ae5d-7eafec12d0e9",
+        "531a1a31-a24d-4cf6-9d1c-8914acdbed92",
+        "e9005b73-b4bd-4c09-a539-71fcf5999b7d",
+        "21dd6527-b64f-4994-a93d-5b07953a9a94",
+        "22f10742-7894-4be1-b5b0-ce381b2e6956",
+        "846c84b2-fca2-4ec9-a2ee-c9e4a45d1375",
+        "21d7a708-5581-4612-9691-9090a57d06c1",
+        "cfac106f-e38f-49b1-a587-2309d230e5b1"
+      ],
+      "description": "Shows the match dashboard to the recruiter, records their decision, and ends on a result page"
+    }
+  ],
+  "id": "PGDTafuoh9nkg1Ho",
+  "tags": []
+}
