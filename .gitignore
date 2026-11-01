@@ -1,0 +1,19 @@
+.env
+storage/uploads/
+storage/*.json
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+dist/
+*.db
+.pytest_cache/
+
+# Local helper files (commit nahi karni)
+*.zip
+extras/
+README_SPRINT1.md
+
+.vscode/
+*.pdf

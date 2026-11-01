@@ -1,0 +1,17 @@
+fastapi
+uvicorn[standard]
+sqlalchemy>=2.0
+psycopg2-binary
+alembic
+pydantic-settings
+pyjwt
+bcrypt
+python-multipart
+celery
+redis
+pypdf
+python-docx
+anthropic
+# dev / test
+pytest
+httpx
